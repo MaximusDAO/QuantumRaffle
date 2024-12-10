@@ -1,0 +1,153 @@
+import { useContractRead, useContractWrite, useWaitForTransaction, useBalance, useAccount } from 'wagmi';
+import { parseEther, formatEther } from 'viem';
+import { useState, useEffect } from 'react';
+
+// Contract ABI - you'll need to replace this with your actual ABI
+const CONTRACT_ABI = [
+  "function gameId() view returns (uint256)",
+  "function deadline() view returns (uint256)",
+  "function lastTimestamp(uint256) view returns (uint256)",
+  "function latestEntrant(uint256) view returns (address)",
+  "function entries(uint256) view returns (uint256)",
+  "function hasClaimed(uint256) view returns (bool)",
+  "function participantRecord(address) view returns (uint256)",
+  "function leaderboard(address) view returns (uint256)",
+  "function entryAmount() view returns (uint256)",
+  "function claimPrize(uint256) external",
+  "receive() external payable"
+];
+
+// Replace with your deployed contract address
+const CONTRACT_ADDRESS = "YOUR_CONTRACT_ADDRESS";
+
+export function useButtonGame() {
+  const { address } = useAccount();
+  const [timeLeft, setTimeLeft] = useState<number>(0);
+
+  // Read current game state
+  const { data: currentGameId } = useContractRead({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: 'gameId',
+    watch: true,
+  });
+
+  const { data: entryAmount } = useContractRead({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: 'entryAmount',
+    watch: true,
+  });
+
+  const { data: lastTimestamp } = useContractRead({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: 'lastTimestamp',
+    args: [currentGameId],
+    watch: true,
+  });
+
+  const { data: currentEntries } = useContractRead({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: 'entries',
+    args: [currentGameId],
+    watch: true,
+  });
+
+  const { data: latestEntrant } = useContractRead({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: 'latestEntrant',
+    args: [currentGameId],
+    watch: true,
+  });
+
+  const { data: playerRecord } = useContractRead({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: 'participantRecord',
+    args: [address],
+    watch: true,
+  });
+
+  const { data: playerLeaderboard } = useContractRead({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: 'leaderboard',
+    args: [address],
+    watch: true,
+  });
+
+  // Write functions
+  const { write: pressButton, data: buttonPressData } = useContractWrite({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: 'receive',
+  });
+
+  const { write: claimPrize, data: claimData } = useContractWrite({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: 'claimPrize',
+  });
+
+  // Transaction states
+  const { isLoading: isPressingButton, isSuccess: buttonPressed } = useWaitForTransaction({
+    hash: buttonPressData?.hash,
+  });
+
+  const { isLoading: isClaiming, isSuccess: claimed } = useWaitForTransaction({
+    hash: claimData?.hash,
+  });
+
+  // Timer logic
+  useEffect(() => {
+    if (!lastTimestamp) return;
+
+    const deadline = Number(lastTimestamp) + (5 * 60); // 5 minutes in seconds
+    const interval = setInterval(() => {
+      const now = Math.floor(Date.now() / 1000);
+      const remaining = deadline - now;
+      setTimeLeft(remaining > 0 ? remaining : 0);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [lastTimestamp]);
+
+  // Helper functions
+  const handlePressButton = async () => {
+    if (!entryAmount) return;
+    pressButton({ value: entryAmount });
+  };
+
+  const handleClaimPrize = async (gameId: number) => {
+    claimPrize({ args: [gameId] });
+  };
+
+  return {
+    // Game state
+    currentGameId: currentGameId ? Number(currentGameId) : 0,
+    entryAmount: entryAmount ? formatEther(entryAmount) : '0',
+    timeLeft,
+    currentPot: currentEntries ? formatEther(currentEntries) : '0',
+    latestPlayer: latestEntrant,
+    isCurrentPlayer: latestEntrant === address,
+    playerStats: {
+      totalContributed: playerRecord ? formatEther(playerRecord) : '0',
+      totalWon: playerLeaderboard ? formatEther(playerLeaderboard) : '0',
+    },
+
+    // Actions
+    pressButton: handlePressButton,
+    claimPrize: handleClaimPrize,
+
+    // Loading states
+    isPressingButton,
+    isClaiming,
+
+    // Success states
+    buttonPressed,
+    claimed,
+  };
+}
