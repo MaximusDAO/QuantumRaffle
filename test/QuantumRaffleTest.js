@@ -131,10 +131,13 @@ describe("QuantumRaffle", function () {
         // Add entries in batches of 10 up to 1020
         for(let i = 1; i < 1020; i++) {
             
+            const countBefore = await game.entrantCount(1);
             await signers[i % 20].sendTransaction({
                 to: game.target,
                 value: 10n * ENTRY_AMOUNT // 10 entries per tx
             });
+            const countAfter = await game.entrantCount(1);
+            expect(countAfter).to.equal(countBefore + 10n);
             if (i==3) {
                 console.log("Testing claim before 100 entries - should fail");
                 // Verify claiming fails when entries < 100
@@ -316,15 +319,22 @@ describe("QuantumRaffle", function () {
 
             }
         }
-        for(let i = 1; i < 50; i++) {
-            
-            await signers[i % 20].sendTransaction({
-                to: game.target,
-                value: 10n* BigInt(i)* ENTRY_AMOUNT // 10 entries per tx
-            });
-            
-        }
- 
+        
+        let numEntrants = await game.entrantCount(1);
+        // Verify prize pool calculation
+        const expectedPrizePool = BigInt(10**18)* ((9n * 2000000n) + ((numEntrants - 9n) * 200000n)) * 8n/10n;
+        const actualPrizePool = await game.prizePool(1);
+        console.log(`Expected prize pool: ${ethers.formatEther(expectedPrizePool)} PLS`);
+        console.log(`Actual prize pool: ${ethers.formatEther(actualPrizePool)} PLS`);
+        expect(actualPrizePool).to.equal(expectedPrizePool);
+
+        // Verify prize per winner calculation
+        const numWin = await game.getNumWinners(1);
+        const expectedPrizePerWinner = expectedPrizePool / numWin;
+        const actualPrizePerWinner = await game.prizePerWinner(1);
+        console.log(`Expected prize per winner: ${ethers.formatEther(expectedPrizePerWinner)} PLS`);
+        console.log(`Actual prize per winner: ${ethers.formatEther(actualPrizePerWinner)} PLS`);
+        expect(actualPrizePerWinner).to.equal(expectedPrizePerWinner);
         // Fast forward time
         console.log("Fast forwarding time past deadline");
         const deadline = await game.deadline();
@@ -501,7 +511,61 @@ describe("QuantumRaffle", function () {
         await expect(
             game.batchClaimAdoptionBonusPrize(1, [{cohortId: 5, entrantId: 999}])
         ).to.be.reverted;
-    
+        // Verify contract balance is zero after all claims
+        const finalBalance = await ethers.provider.getBalance(game.target);
+        expect(finalBalance).to.be.closeTo(0n, 10000n); // Allow small rounding differences
+        console.log("Contract balance is zero - all funds distributed");
+
+        // Test that non-winners cannot claim prizes
+        console.log("Testing invalid prize claims");
+        await expect(
+            game.claimPrize(1, 1) // First entrant should not be winner
+        ).to.be.reverted;
+
+        await expect(
+            game.claimPrize(1, totalEntrants - 50n) // Random non-winning ID
+        ).to.be.reverted;
+
+        // Test claiming with invalid entrant IDs
+        console.log("Testing claims with invalid IDs");
+        await expect(
+            game.claimPrize(1, 0) // ID 0 doesn't exist
+        ).to.be.reverted;
+
+        await expect(
+            game.claimPrize(1, totalEntrants + 1n) // ID beyond max
+        ).to.be.reverted;
+
+        // Test claiming from invalid game ID
+        console.log("Testing claims from invalid game");
+        await expect(
+            game.claimPrize(2, totalEntrants) // Game 2 doesn't exist yet
+        ).to.be.reverted;
+
+        await expect(
+            game.claimPrize(0, totalEntrants) // Game 0 never exists
+        ).to.be.reverted;
+
+        
+
+        // Test that new entries start a new game automatically
+        console.log("Testing new game starts automatically with new entry");
+        await expect(
+            signers[0].sendTransaction({
+                to: game.target,
+                value: ENTRY_AMOUNT*10n
+            })
+        ).to.not.be.reverted;
+
+        const newGameId = await game.gameId();
+        expect(newGameId).to.equal(2n);
+
+        // Verify new game is properly initialized
+        const newDeadline = await game.deadline();
+        expect(newDeadline).to.be.gt(0);
+        expect(await game.entrantCount(2)).to.equal(1);
+        expect(await game.prizePool(2)).to.equal(ENTRY_AMOUNT*8n);
+        expect(await game.getNumWinners(2)).to.equal(1);
     });
     });
 });

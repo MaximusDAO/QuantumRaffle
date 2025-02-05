@@ -1,4 +1,4 @@
-# Quantum Raffle Deep Dive
+# Quantum Raffle
 
 Quantum Raffle is a speculative PulseChain experience with massive prize potential. Winners are determined in a fair, transparent, and automated fashion.
 
