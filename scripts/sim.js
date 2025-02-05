@@ -1,8 +1,8 @@
 const { ethers } = require("hardhat");
 
-const contractAddress = "0x9D3999af03458c11C78F7e6C0fAE712b455D4e33";
+const contractAddress = "0x8731d45ff9684d380302573cCFafd994Dfa7f7d3";
 
-const num_runs = 100000;
+const num_runs = 1000000000;
 function isDivisibleByPowerOf10(num) {
     // Skip if number is 0 since it's divisible by everything
     if (num === 0n) return true;
@@ -15,7 +15,7 @@ function isDivisibleByPowerOf10(num) {
 async function main() {
     try {
         let signers = await ethers.getSigners();
-        const TheButtonABI = require("../artifacts/contracts/TheButton.sol/QuantumRaffle.json").abi;
+        const TheButtonABI = require("../artifacts/contracts/QuantumRaffle.sol/QuantumRaffle.json").abi;
         const contract = new ethers.Contract(contractAddress, TheButtonABI, signers[0]);
         const gameId = await contract.gameId();
         let numWinners =1;
@@ -36,11 +36,13 @@ async function main() {
             
             const tx = await signer.sendTransaction({
                 to: contractAddress,
-                value: entryAmount * mult * 5n,
+                value: entryAmount * mult * 10n,
                 data: "0x"
             });
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
-            
+            //await new Promise(resolve => setTimeout(resolve, 10)); // Wait 1 second
+            if(i % 1000 === 0) {
+                console.log(i);
+            }
             const receipt = await tx.wait();
             
             

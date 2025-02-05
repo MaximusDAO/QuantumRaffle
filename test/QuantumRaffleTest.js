@@ -316,6 +316,14 @@ describe("QuantumRaffle", function () {
 
             }
         }
+        for(let i = 1; i < 50; i++) {
+            
+            await signers[i % 20].sendTransaction({
+                to: game.target,
+                value: 10n* BigInt(i)* ENTRY_AMOUNT // 10 entries per tx
+            });
+            
+        }
  
         // Fast forward time
         console.log("Fast forwarding time past deadline");

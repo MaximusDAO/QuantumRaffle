@@ -17,7 +17,7 @@ async function main() {
   console.log("Contract deployed to:", contractAddress);
 
   // Create contract instance
-  const TheButtonABI = require("../artifacts/contracts/TheButton.sol/QuantumRaffle.json").abi;
+  const TheButtonABI = require("../artifacts/contracts/QuantumRaffle.sol/QuantumRaffle.json").abi;
   const contract = new ethers.Contract(contractAddress, TheButtonABI, signers[0]);
   //await contract.startGame();
   // Log initial state
